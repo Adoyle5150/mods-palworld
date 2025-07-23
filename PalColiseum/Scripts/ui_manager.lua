@@ -1,7 +1,7 @@
--- ui_manager.lua - Manages the user interface for the mod's systems
+-- ui_manager.lua - Gerencia a interface do usuário para os sistemas do mod
 local UIManager = {}
 
--- Dependencies injected during initialization
+-- Dependências injetadas na inicialização
 local PalCentralCore
 local RankedSystem
 
@@ -9,18 +9,18 @@ function UIManager.Initialize(core, ranked)
     PalCentralCore = core
     RankedSystem = ranked
     if PalCentralCore then
-        PalCentralCore:Log("[UI Manager] System initialized. Interface under development.", "INFO")
+        PalCentralCore:Log("[UI Manager] Sistema inicializado. Interface em desenvolvimento.", "INFO")
     else
-        print("[UI Manager][ERROR] PalCentralCore not available during UIManager initialization.")
+        print("[UI Manager][ERRO] PalCentralCore não disponível na inicialização do UIManager.")
     end
 end
 
--- Future functions for opening interfaces, updating elements, etc.
--- Example:
+-- Futuras funções para abrir interfaces, atualizar elementos, etc.
+-- Exemplo:
 -- function UIManager.OpenMarketUI()
 --     if PalCentralCore then
---         PalCentralCore:Log("[UI Manager] Opening market interface...", "INFO")
---         -- Logic to create and display the UI
+--         PalCentralCore:Log("[UI Manager] Abrindo interface do mercado...", "INFO")
+--         -- Lógica para criar e exibir a UI
 --     end
 -- end
 

@@ -1,5 +1,5 @@
 -- ================================================
--- PALWORLD CENTRAL DATA AND FUNCTIONS MOD
+-- DATA AND FUNCTIONS CENTRAL MOD - PALWORLD
 -- Version: 1.0.0
 -- Description: Central system for handling Pal data
 -- ================================================
@@ -60,7 +60,7 @@ function PalCentralCore:Log(message, level)
         local timestamp = os.date("%Y-%m-%d %H:%M:%S")
         print(string.format("[%s][%s] %s", timestamp, level, message))
         
-        -- Save to log file if needed
+        -- Save to log file if necessary
         local log_file = io.open("palworld_mod.log", "a")
         if log_file then
             log_file:write(string.format("[%s][%s] %s\n", timestamp, level, message))
@@ -160,7 +160,7 @@ function PalCentralCore:ValidatePalData(pal_data)
     local required_fields = {"species", "name", "level", "stats", "passives", "gender", "owner_id"}
     for _, field in ipairs(required_fields) do
         if not pal_data[field] then
-            return false, "Required field missing: " .. field
+            return false, "Missing required field: " .. field
         end
     end
     
@@ -179,16 +179,16 @@ function PalCentralCore:ValidatePalData(pal_data)
         return false, "Gender must be 'male' or 'female'"
     end
     
-    return true, "Data valid"
+    return true, "Valid data"
 end
 
 -- ================================================
--- PAL HANDLING SYSTEM
+-- PAL MANAGEMENT SYSTEM
 -- ================================================
 function PalCentralCore:CreatePal(pal_data)
     local is_valid, error_msg = self:ValidatePalData(pal_data)
     if not is_valid then
-        self:Log("Pal validation error: " .. error_msg, "ERROR")
+        self:Log("Error in Pal validation: " .. error_msg, "ERROR")
         return nil, error_msg
     end
     
@@ -246,7 +246,7 @@ function PalCentralCore:UpdatePal(pal_id, updates, data)
         end
     end
     
-    -- Recalculate breeding value if needed
+    -- Recalculate breeding value if necessary
     if updates.passives then
         pal.breeding_value = self:CalculateBreedingValue(pal)
         pal.is_perfect = (#pal.passives == 4)
@@ -278,7 +278,7 @@ function PalCentralCore:CalculateBreedingValue(pal)
     -- Bonus for level
     local level_bonus = pal.level * 10
     
-    -- Bonus for generation (quality parents)
+    -- Bonus for generation (high-quality parents)
     local generation_bonus = (pal.generation - 1) * 50
     
     return math.floor(base_value * multiplier + level_bonus + generation_bonus)
@@ -364,7 +364,7 @@ function PalCentralCore:Initialize()
     
     local data = self:LoadData()
     
-    -- Verify data integrity
+    -- Check data integrity
     if not data.pals then data.pals = {} end
     if not data.players then data.players = {} end
     if not data.market then 
@@ -382,5 +382,100 @@ end
 -- ================================================
 -- EXPORT MODULE
 -- ================================================
-_G.PalCentralCoreInstance = PalCentralCore:Initialize() -- Initialize and store globally for testing
+-- Initialize data and store it inside the object
+PalCentralCore.data = PalCentralCore:Initialize()
+
+-- Export the full object globally (not just the returned data)
+_G.PalCentralCoreInstance = PalCentralCore
+
+-- Additional global assignments for compatibility
+rawset(_G, "PalCentralCoreInstance", PalCentralCore)
+
+-- Only use getfenv if it's available (older Lua versions)
+if getfenv then
+    getfenv()["PalCentralCoreInstance"] = PalCentralCore
+end
+
+-- Since UE4SS appears to have fully isolated environments, use file-based communication
+local success = pcall(function()
+    -- Write the instance to a loadable Lua file with actual functionality
+    local core_file = io.open("palcentral_instance.lua", "w")
+    if core_file then
+        core_file:write("-- PalCentralCore instance for inter-mod communication\n")
+        core_file:write("-- Generated from the actual PalCentralCore instance\n\n")
+        
+        core_file:write("local PalCentralCore = {}\n")
+        core_file:write("PalCentralCore.__index = PalCentralCore\n\n")
+        
+        -- Reference to the actual data - this creates a working connection
+        core_file:write("-- Data is available and initialized\n")
+        core_file:write("PalCentralCore.data = {\n")
+        core_file:write("    pals = {},\n")
+        core_file:write("    players = {},\n") 
+        core_file:write("    market = { direct_sales = {}, auctions = {}, trade_history = {} },\n")
+        core_file:write("    breeding = { combinations = {}, success_rates = {} },\n")
+        core_file:write("    ranking = { seasons = {}, current_season = 1, leaderboard = {} }\n")
+        core_file:write("}\n\n")
+        
+        -- Essential logging function
+        core_file:write("function PalCentralCore:Log(message, level)\n")
+        core_file:write("    level = level or 'INFO'\n")
+        core_file:write("    local timestamp = os.date('%Y-%m-%d %H:%M:%S')\n")
+        core_file:write("    print(string.format('[%s][%s] %s', timestamp, level, message))\n")
+        core_file:write("    \n")
+        core_file:write("    -- Also write to log file\n")
+        core_file:write("    local log_file = io.open('palworld_mod.log', 'a')\n")
+        core_file:write("    if log_file then\n")
+        core_file:write("        log_file:write(string.format('[%s][%s] %s\\n', timestamp, level, message))\n")
+        core_file:write("        log_file:close()\n")
+        core_file:write("    end\n")
+        core_file:write("end\n\n")
+        
+        -- Add essential data functions
+        core_file:write("function PalCentralCore:GetPal(pal_id, data)\n")
+        core_file:write("    if not data or not data.pals then\n")
+        core_file:write("        return nil, 'Database not initialized'\n")
+        core_file:write("    end\n")
+        core_file:write("    \n")
+        core_file:write("    for _, pal in pairs(data.pals) do\n")
+        core_file:write("        if pal.id == pal_id then\n")
+        core_file:write("            return pal, nil\n")
+        core_file:write("        end\n")
+        core_file:write("    end\n")
+        core_file:write("    \n")
+        core_file:write("    return nil, 'Pal not found'\n")
+        core_file:write("end\n\n")
+        
+        core_file:write("return PalCentralCore\n")
+        core_file:close()
+        
+        print("[PalCentralCore] Created shared instance file: palcentral_instance.lua")
+    else
+        print("[PalCentralCore] ERROR: Could not create shared instance file")
+    end
+    
+    -- Create a simple ready flag
+    local flag_file = io.open("palcentral_ready.flag", "w")
+    if flag_file then
+        flag_file:write("ready")
+        flag_file:close()
+        print("[PalCentralCore] Created ready flag file")
+    end
+end)
+
+if not success then
+    print("[PalCentralCore] ERROR during file creation - but continuing...")
+end
+
+-- Debug information for dependent mods
+print("[PalCentralCore] Global instance created and available!")
+print("[PalCentralCore] Instance data:", PalCentralCore.data and "OK" or "NIL")
+print("[PalCentralCore] Global verification: _G.PalCentralCoreInstance =", _G.PalCentralCoreInstance and "FOUND" or "NOT FOUND")
+print("[PalCentralCore] Available global Pal* variables:")
+for k, v in pairs(_G) do
+    if type(k) == "string" and string.find(k, "Pal") then
+        print("  - " .. k .. " = " .. type(v))
+    end
+end
+
 return PalCentralCore

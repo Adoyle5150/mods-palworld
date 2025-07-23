@@ -1,71 +1,71 @@
--- ranked_system.lua - Ranking system for the Ranked Coliseum
+-- ranked_system.lua - Sistema de classificação para o Coliseu Ranqueado
 
 local RankedSystem = {}
 
 -- ================================================
--- RANK ENUMS AND CONSTANTS
+-- ENUMS E CONSTANTES DE RANKING
 -- ================================================
 RankedSystem.Ranks = {
-    IRON = {id = 0, name = "Iron", points_min = 0, points_max = 100},
+    FERRO = {id = 0, name = "Ferro", points_min = 0, points_max = 100},
     BRONZE = {id = 1, name = "Bronze", points_min = 101, points_max = 200},
-    SILVER = {id = 2, name = "Silver", points_min = 201, points_max = 300},
-    GOLD = {id = 3, name = "Gold", points_min = 301, points_max = 400},
-    PLATINUM = {id = 4, name = "Platinum", points_min = 401, points_max = 500},
-    EMERALD = {id = 5, name = "Emerald", points_min = 501, points_max = 600},
-    DIAMOND = {id = 6, name = "Diamond", points_min = 601, points_max = 700},
-    MASTER = {id = 7, name = "Master", points_min = 701, points_max = 800},
-    GRAND_MASTER = {id = 8, name = "Grand Master", points_min = 801, points_max = 900},
-    LEGEND = {id = 9, name = "Legend", points_min = 901, points_max = 9999} -- points_max is a theoretical limit, the rank is unique
+    PRATA = {id = 2, name = "Prata", points_min = 201, points_max = 300},
+    OURO = {id = 3, name = "Ouro", points_min = 301, points_max = 400},
+    PLATINA = {id = 4, name = "Platina", points_min = 401, points_max = 500},
+    ESMERALDA = {id = 5, name = "Esmeralda", points_min = 501, points_max = 600},
+    DIAMANTE = {id = 6, name = "Diamante", points_min = 601, points_max = 700},
+    MESTRE = {id = 7, name = "Mestre", points_min = 701, points_max = 800},
+    GRAO_MESTRE = {id = 8, name = "Grão Mestre", points_min = 801, points_max = 900},
+    PAULZUDO = {id = 9, name = "Paulzudo", points_min = 901, points_max = 9999} -- Pontos_max é um limite teórico, o rank é único
 }
 
 RankedSystem.Categories = {"Ubers", "OU", "UU", "NU", "LC"}
 
 -- ================================================
--- PLAYER DATA (Stored in RankedSystem's local memory)
+-- DADOS DO JOGADOR (Armazenamento em memória local do RankedSystem)
 -- ================================================
 local players_data = {}
-local current_legend = nil -- ID of the current Legend player
+local current_paulzudo = nil -- ID do jogador que é Paulzudo no momento
 
--- Reference to the PalCentralCore instance
+-- Referência à instância do PalCentralCore
 local PalCentralCoreRef = nil
 
 -- ================================================
--- RANKING SYSTEM INITIALIZATION
+-- INICIALIZAÇÃO DO SISTEMA DE RANKING
 -- ================================================
 function RankedSystem.Initialize(palCentralCore)
-    PalCentralCoreRef = palCentralCore -- Store the core reference
+    PalCentralCoreRef = palCentralCore -- Armazena a referência ao core
     if not PalCentralCoreRef then
-        print("[Ranked System][FATAL ERROR] PalCentralCore not available during RankedSystem initialization.")
+        print("[Ranked System][ERRO FATAL] PalCentralCore não disponível na inicialização do RankedSystem.")
         return
     end
 
-    PalCentralCoreRef:Log("[Ranked System] System initialized.", "INFO")
+    PalCentralCoreRef:Log("[Ranked System] Sistema inicializado.", "INFO")
     RankedSystem.LoadPlayerData()
     
-    -- Set a timer for periodic data saving (for more frequent persistence)
-    -- PalCentralCore must have CONFIG.BACKUP_INTERVAL
-    -- Added check for PalCentralCoreRef.CONFIG
+    -- Definir um timer para salvar dados periodicamente (para persistência mais frequente)
+    -- O PalCentralCore deve ter a CONFIG.BACKUP_INTERVAL
+    -- Adicionada verificação para PalCentralCoreRef.CONFIG
     if PalCentralCoreRef.CONFIG and PalCentralCoreRef.CONFIG.BACKUP_INTERVAL then
         Timer.SetInterval(function()
             RankedSystem.SavePlayerData()
-        end, PalCentralCoreRef.CONFIG.BACKUP_INTERVAL * 1000) -- Save every X seconds (converted to milliseconds)
-        PalCentralCoreRef:Log(string.format("[Ranked System] Scheduled automatic saving every %d seconds.", PalCentralCoreRef.CONFIG.BACKUP_INTERVAL), "DEBUG")
+        end, PalCentralCoreRef.CONFIG.BACKUP_INTERVAL * 1000) -- Salva a cada X segundos (convertendo para milissegundos)
+        PalCentralCoreRef:Log(string.format("[Ranked System] Agendado salvamento automático a cada %d segundos.", PalCentralCoreRef.CONFIG.BACKUP_INTERVAL), "DEBUG")
     else
-        PalCentralCoreRef:Log("[Ranked System] Backup interval not defined in PalCentralCore. Automatic saving disabled.", "WARN")
+        PalCentralCoreRef:Log("[Ranked System] Intervalo de backup não definido no PalCentralCore. Salvamento automático desabilitado.", "WARN")
     end
 end
 
 -- ================================================
--- PLAYER REGISTRATION AND UPDATE
+-- REGISTRO E ATUALIZAÇÃO DE JOGADORES
 -- ================================================
 function RankedSystem.RegisterPlayer(player_character, palCentralCore)
     local core = palCentralCore or PalCentralCoreRef
     if not core then
-        print("[Ranked System][ERROR] Core unavailable for player registration.")
+        print("[Ranked System][ERRO] Core indisponível para registrar jogador.")
         return
     end
 
-    -- Safely obtain Player ID and Name
+    -- Obter o Player ID e Nome de forma segura
     local player_id_obj = player_character:GetPlayerID()
     local player_id = tostring(player_id_obj)
     local player_name = player_character:GetPlayerName()
@@ -75,35 +75,35 @@ function RankedSystem.RegisterPlayer(player_character, palCentralCore)
             id = player_id,
             name = player_name,
             points = 0,
-            rank = RankedSystem.Ranks.IRON, -- Starts at Iron
+            rank = RankedSystem.Ranks.FERRO, -- Começa no Ferro
             wins = 0,
             losses = 0,
             win_streak = 0,
-            season_wins = 0, -- For Battle Pass
-            category_points = { -- Points separated by category
+            season_wins = 0, -- Para o Battle Pass
+            category_points = { -- Pontos separados por categoria
                 Ubers = 0, OU = 0, UU = 0, NU = 0, LC = 0
             },
-            battle_pass_rewards = {} -- Battle Pass rewards already obtained
+            battle_pass_rewards = {} -- Recompensas do Battle Pass já obtidas
         }
-        core:Log(string.format("[Ranked System] Player '%s' (ID: %s) registered.", player_name, player_id), "INFO")
-        RankedSystem.SavePlayerData() -- Save after registering a new player
+        core:Log(string.format("[Ranked System] Jogador '%s' (ID: %s) registrado.", player_name, player_id), "INFO")
+        RankedSystem.SavePlayerData() -- Salva após registrar novo jogador
     else
-        -- Update player name if it has changed (or other non-rank data)
+        -- Atualizar nome do jogador se tiver mudado (ou outros dados que não sejam de rank)
         if players_data[player_id].name ~= player_name then
             players_data[player_id].name = player_name
-            core:Log(string.format("[Ranked System] Player name '%s' (ID: %s) updated to '%s'.", players_data[player_id].name, player_id, player_name), "INFO")
+            core:Log(string.format("[Ranked System] Nome do jogador '%s' (ID: %s) atualizado para '%s'.", players_data[player_id].name, player_id, player_name), "INFO")
             RankedSystem.SavePlayerData()
         end
     end
 end
 
 -- ================================================
--- BATTLE RESULT PROCESSING
+-- PROCESSAMENTO DE RESULTADOS DE BATALHA
 -- ================================================
 function RankedSystem.ProcessBattleResult(winner_id, loser_id, category)
     local core = PalCentralCoreRef
     if not core then
-        print("[Ranked System][ERROR] Core unavailable for battle processing.")
+        print("[Ranked System][ERRO] Core indisponível para processar batalha.")
         return
     end
 
@@ -111,75 +111,75 @@ function RankedSystem.ProcessBattleResult(winner_id, loser_id, category)
     local loser = players_data[loser_id]
     
     if not winner or not loser then
-        core:Log(string.format("[Ranked System] Error: Winner (%s) or Loser (%s) not found for battle processing.", winner_id, loser_id), "WARN")
+        core:Log(string.format("[Ranked System] Erro: Vencedor (%s) ou Perdedor (%s) não encontrado para processar batalha.", winner_id, loser_id), "WARN")
         return
     end
     
-    -- Calculate points
+    -- Calcular pontos
     local points_gained = RankedSystem.CalculatePointsGained(winner, loser)
     local points_lost = RankedSystem.CalculatePointsLost(winner, loser)
     
-    -- Update winner
+    -- Atualizar vencedor
     winner.points = winner.points + points_gained
     winner.wins = winner.wins + 1
     winner.win_streak = winner.win_streak + 1
     winner.season_wins = winner.season_wins + 1
     winner.category_points[category] = (winner.category_points[category] or 0) + points_gained
     
-    -- Update loser
+    -- Atualizar perdedor
     loser.points = math.max(0, loser.points - points_lost)
     loser.losses = loser.losses + 1
-    loser.win_streak = 0 -- Reset win streak
+    loser.win_streak = 0 -- Reseta a sequência de vitórias
     loser.category_points[category] = math.max(0, (loser.category_points[category] or 0) - points_lost)
     
-    -- Check rank changes
+    -- Verificar mudanças de rank
     RankedSystem.UpdatePlayerRank(winner)
     RankedSystem.UpdatePlayerRank(loser)
     
     RankedSystem.SavePlayerData()
     
-    core:Log(string.format("[Ranked System] Battle processed: %s (+%d) vs %s (-%d) in category %s", 
+    core:Log(string.format("[Ranked System] Batalha processada: %s (+%d) vs %s (-%d) na categoria %s", 
         winner.name, points_gained, loser.name, points_lost, category), "INFO")
 end
 
 -- ================================================
--- POINTS CALCULATION
+-- CÁLCULO DE PONTOS
 -- ================================================
 function RankedSystem.CalculatePointsGained(winner, loser)
     local base_points = 25
     local rank_diff = loser.rank.id - winner.rank.id
     
-    -- Bonus for defeating a stronger opponent
+    -- Bônus por enfrentar oponente mais forte
     if rank_diff > 0 then
         base_points = base_points + (rank_diff * 5)
     end
     
-    -- Bonus for win streak
+    -- Bônus por win streak
     if winner.win_streak >= 3 then
         base_points = base_points + 5
     end
     
-    return math.max(20, math.min(30, base_points)) -- Points gained between 20 and 30
+    return math.max(20, math.min(30, base_points)) -- Pontos ganhos entre 20 e 30
 end
 
 function RankedSystem.CalculatePointsLost(winner, loser)
     local base_points = 15
     local rank_diff = winner.rank.id - loser.rank.id
     
-    -- Penalty for losing to a weaker opponent
+    -- Penalidade por perder para oponente mais fraco
     if rank_diff > 0 then
         base_points = base_points + (rank_diff * 5)
     end
     
-    return math.max(10, math.min(20, base_points)) -- Points lost between 10 and 20
+    return math.max(10, math.min(20, base_points)) -- Pontos perdidos entre 10 e 20
 end
 
 -- ================================================
--- RANK UPDATE
+-- ATUALIZAÇÃO DE RANK
 -- ================================================
 function RankedSystem.UpdatePlayerRank(player)
     local core = PalCentralCoreRef
-    if not core then return end -- Log already handled in ProcessBattleResult
+    if not core then return end -- Log já foi feito na ProcessBattleResult
     
     local old_rank = player.rank
     local new_rank = RankedSystem.GetRankByPoints(player.points)
@@ -187,13 +187,13 @@ function RankedSystem.UpdatePlayerRank(player)
     if new_rank.id ~= old_rank.id then
         player.rank = new_rank
         
-        -- Check for Legend promotion
-        if new_rank.id == RankedSystem.Ranks.LEGEND.id and old_rank.id ~= RankedSystem.Ranks.LEGEND.id then
-            RankedSystem.HandleLegendPromotion(player)
+        -- Verificar promoção para Paulzudo
+        if new_rank.id == RankedSystem.Ranks.PAULZUDO.id and old_rank.id ~= RankedSystem.Ranks.PAULZUDO.id then
+            RankedSystem.HandlePaulzudoPromotion(player)
         end
         
-        core:Log(string.format("[Ranked System] %s (%s) promoted to %s!", player.name, player.id, new_rank.name), "INFO")
-        -- If it's the player's first time reaching this rank, consider giving a reward here
+        core:Log(string.format("[Ranked System] %s (%s) promovido para %s!", player.name, player.id, new_rank.name), "INFO")
+        -- Se for a primeira vez que um jogador atingiu esse rank, talvez dar uma recompensa aqui
     end
 end
 
@@ -203,104 +203,104 @@ function RankedSystem.GetRankByPoints(points)
             return rank
         end
     end
-    return RankedSystem.Ranks.IRON -- Return Iron if points are below the minimum
+    return RankedSystem.Ranks.FERRO -- Retorna Ferro se os pontos forem abaixo do mínimo
 end
 
 -- ================================================
--- LEGEND RANK LOGIC (UNIQUE RANK)
+-- LÓGICA DO PAULZUDO (RANK ÚNICO)
 -- ================================================
-function RankedSystem.HandleLegendPromotion(new_legend)
+function RankedSystem.HandlePaulzudoPromotion(new_paulzudo)
     local core = PalCentralCoreRef
     if not core then return end
 
-    -- Demote previous Legend, if exists and not the same player
-    if current_legend and current_legend ~= new_legend.id then
-        local old_legend = players_data[current_legend]
-        if old_legend then
-            -- Demote to Grand Master
-            old_legend.rank = RankedSystem.Ranks.GRAND_MASTER
-            old_legend.points = RankedSystem.Ranks.GRAND_MASTER.points_max -- Ensure points fit the rank
-            core:Log(string.format("[Ranked System] Previous Legend %s demoted to Grand Master.", old_legend.name), "INFO")
+    -- Rebaixar Paulzudo anterior, se houver e não for o mesmo
+    if current_paulzudo and current_paulzudo ~= new_paulzudo.id then
+        local old_paulzudo = players_data[current_paulzudo]
+        if old_paulzudo then
+            -- Rebaixa para Grão Mestre
+            old_paulzudo.rank = RankedSystem.Ranks.GRAO_MESTRE
+            old_paulzudo.points = RankedSystem.Ranks.GRAO_MESTRE.points_max -- Garante que os pontos se encaixem no rank
+            core:Log(string.format("[Ranked System] Paulzudo anterior %s rebaixado para Grão Mestre.", old_paulzudo.name), "INFO")
         end
     end
     
-    current_legend = new_legend.id
+    current_paulzudo = new_paulzudo.id
     
-    -- Broadcast to server
-    RankedSystem.BroadcastLegendNotification(new_legend.name)
-    RankedSystem.SavePlayerData() -- Save to persist the new Legend
+    -- Broadcast para servidor
+    RankedSystem.BroadcastPaulzudoNotification(new_paulzudo.name)
+    RankedSystem.SavePlayerData() -- Salva para persistir o novo Paulzudo
 end
 
-function RankedSystem.BroadcastLegendNotification(player_name)
+function RankedSystem.BroadcastPaulzudoNotification(player_name)
     local core = PalCentralCoreRef
     if not core then return end
 
-    local message = string.format("🏆 %s has achieved the LEGEND rank and is the SUPREME MASTER of the Palworld Coliseum! 🏆", player_name)
+    local message = string.format("🏆 %s conquistou o ranque PAULZUDO e é o MESTRE SUPREMO do Coliseu de Palworld! 🏆", player_name)
     
     core:Log("[BROADCAST] " .. message, "INFO")
     
-    -- Attempt to send message in game chat
-    -- This functionality depends on the UE4SS API for chat.
-    -- PalCentralCore would need to expose a function for this, or you would need
-    -- to find a valid PlayerController to execute the 'say' command.
-    -- For now, we're just logging, but ideally, the message should go to global chat.
-    -- Example: core:SendGlobalChatMessage(message) (if the core has this function)
-    local anyPlayerController = GetWorld():GetFirstPlayerController() -- Try to get any player controller
+    -- Tentar enviar mensagem no chat do jogo
+    -- Esta é uma funcionalidade que depende da API do UE4SS para o chat.
+    -- O PalCentralCore precisaria expor uma função para isso, ou você precisaria
+    -- encontrar um PlayerController válido para executar o comando 'say'.
+    -- Por enquanto, estamos apenas logando, mas o ideal é a mensagem no chat global.
+    -- Exemplo: core:SendGlobalChatMessage(message) (se o core tiver essa função)
+    local anyPlayerController = GetWorld():GetFirstPlayerController() -- Tenta pegar qualquer player controller
     if anyPlayerController and anyPlayerController.ExecuteConsoleCommand then
         anyPlayerController:ExecuteConsoleCommand("say " .. message)
     else
-        core:Log("[BROADCAST ERROR] Unable to send message to game chat (PlayerController/API unavailable).", "WARN")
+        core:Log("[BROADCAST ERROR] Não foi possível enviar mensagem para o chat do jogo (PlayerController/API indisponível).", "WARN")
     end
 end
 
 -- ================================================
--- DATA PERSISTENCE
+-- PERSISTÊNCIA DE DADOS
 -- ================================================
 function RankedSystem.SavePlayerData()
     local core = PalCentralCoreRef
     if not core then 
-        print("[Ranked System][ERROR] Core unavailable for saving rank data.")
+        print("[Ranked System][ERRO] Core indisponível para salvar dados do rank.")
         return
     end
 
-    -- Update the players section in the core's global database
-    -- Ensure 'data.players_data' exists in the core's global structure
+    -- Atualiza a seção de players na base de dados global do core
+    -- Garante que 'data.players_data' exista na estrutura global do core
     if not core.data.players_data then
         core.data.players_data = {}
     end
-    core.data.players_data = players_data -- Save the players table
-    core.data.current_legend = current_legend -- Save the current Legend
+    core.data.players_data = players_data -- Salva a tabela de players
+    core.data.current_paulzudo = current_paulzudo -- Salva quem é o Paulzudo
 
-    core:SaveData(core.data) -- Save the core's complete database to the JSON file
-    core:Log("[Ranked System] Rank data saved to PalCentralCore.", "INFO")
+    core:SaveData(core.data) -- Salva a base de dados completa do core no arquivo JSON
+    core:Log("[Ranked System] Dados de rank salvos no PalCentralCore.", "INFO")
 end
 
 function RankedSystem.LoadPlayerData()
     local core = PalCentralCoreRef
     if not core then 
-        print("[Ranked System][ERROR] Core unavailable for loading rank data.")
+        print("[Ranked System][ERRO] Core indisponível para carregar dados do rank.")
         return
     end
 
-    -- Load player data from the core's global database
-    -- If core.data.players_data exists, use it; otherwise, initialize an empty table
+    -- Carrega os dados de players da base de dados global do core
+    -- Se core.data.players_data existir, usa-o, senão inicializa uma tabela vazia
     players_data = core.data.players_data or {}
-    current_legend = core.data.current_legend or nil
+    current_paulzudo = core.data.current_paulzudo or nil
     
-    core:Log("[Ranked System] Rank data loaded from PalCentralCore.", "INFO")
+    core:Log("[Ranked System] Dados de rank carregados do PalCentralCore.", "INFO")
 
-    -- If Legend exists and is not in the correct rank (e.g., after a crash or manual demotion)
-    if current_legend and players_data[current_legend] and players_data[current_legend].rank.id ~= RankedSystem.Ranks.LEGEND.id then
-        local old_legend_player = players_data[current_legend]
-        -- Fix the Legend's rank if it was demoted incorrectly due to a bug/restart
-        old_legend_player.rank = RankedSystem.Ranks.LEGEND 
-        old_legend_player.points = RankedSystem.Ranks.LEGEND.points_min -- Adjust points
-        core:Log(string.format("[Ranked System] Legend (%s) revalidated after loading.", old_legend_player.name), "WARN")
+    -- Se o Paulzudo existe e não está no rank certo (por exemplo, após um crash ou rebaixamento manual)
+    if current_paulzudo and players_data[current_paulzudo] and players_data[current_paulzudo].rank.id ~= RankedSystem.Ranks.PAULZUDO.id then
+        local old_paulzudo_player = players_data[current_paulzudo]
+        -- Isso corrige o rank do Paulzudo se ele foi rebaixado indevidamente por um bug/restart
+        old_paulzudo_player.rank = RankedSystem.Ranks.PAULZUDO 
+        old_paulzudo_player.points = RankedSystem.Ranks.PAULZUDO.points_min -- Ajusta pontos
+        core:Log(string.format("[Ranked System] Paulzudo (%s) revalidado após carregamento.", old_paulzudo_player.name), "WARN")
     end
 end
 
 -- ================================================
--- QUERY FUNCTIONS
+-- FUNÇÕES DE CONSULTA
 -- ================================================
 function RankedSystem.GetPlayerData(player_id)
     return players_data[player_id]
@@ -314,7 +314,7 @@ function RankedSystem.GetLeaderboard(limit)
         table.insert(sorted_players, player)
     end
     
-    -- Sort by points (descending), then by wins (descending)
+    -- Ordenar por pontos (decrescente), depois por vitórias (decrescente)
     table.sort(sorted_players, function(a, b)
         if a.points == b.points then
             return a.wins > b.wins
@@ -323,8 +323,8 @@ function RankedSystem.GetLeaderboard(limit)
     end)
     
     local result = {}
-    -- Fix: was inserting the result instead of the player.
-    -- Now inserts the sorted players into the 'result' array.
+    -- Correção: estava inserindo o resultado em vez do player.
+    -- Agora insere os jogadores ordenados no array 'result'.
     for i = 1, math.min(limit, #sorted_players) do
         table.insert(result, sorted_players[i]) 
     end
@@ -333,6 +333,6 @@ function RankedSystem.GetLeaderboard(limit)
 end
 
 -- ================================================
--- EXPORT MODULE
+-- EXPORTAR MÓDULO
 -- ================================================
 return RankedSystem

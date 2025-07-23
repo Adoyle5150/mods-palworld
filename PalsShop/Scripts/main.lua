@@ -1,49 +1,132 @@
 -- ================================================
--- MARKET MOD - PALWORLD
+-- PALWORLD MARKET MOD
 -- Version: 1.0.0
--- Description: Complete economic system with sales and auctions
+-- Description: Full economic system with sales and auctions
 -- ================================================
+
+-- Extend package.path to locate BreedingCore's breeding.lua
+package.path = package.path .. ";E:/Palstorm/Pal/Binaries/Win64/Mods/BreedingCore/Scripts/?.lua"
+
+-- Function to wait for PalCentralCore
+local function WaitForPalCentralCore()
+    local attempts = 0
+    local max_attempts = 30 -- Wait up to 30 seconds
+    
+    while attempts < max_attempts do
+        -- Try multiple methods to find PalCentralCore (check each explicitly)
+        local core = nil
+        if _G.PalCentralCoreInstance then
+            core = _G.PalCentralCoreInstance
+            print("[PalsShop] Found via _G.PalCentralCoreInstance")
+        elseif package.loaded["PalCentralCoreInstance"] then
+            core = package.loaded["PalCentralCoreInstance"]
+            print("[PalsShop] Found via package.loaded['PalCentralCoreInstance']")
+        elseif package.loaded["PalCentralCore"] then
+            core = package.loaded["PalCentralCore"]
+            print("[PalsShop] Found via package.loaded['PalCentralCore']")
+        else
+            -- Try file-based approach
+            local success, file_core = pcall(dofile, "palcentral_instance.lua")
+            if success and file_core then
+                core = file_core
+                print("[PalsShop] Found via file-based communication (palcentral_instance.lua)")
+            end
+        end
+                    
+        if core and core.data then
+            print("[PalsShop] PalCentralCore found and ready!")
+            return core
+        end
+        
+        -- Also check for file indicator
+        local flag_file = io.open("palcentral_ready.flag", "r")
+        if flag_file then
+            flag_file:close()
+            print("[PalsShop] Flag file exists, re-checking package.loaded...")
+            -- If flag exists, try one more time to get the instance
+            if package.loaded["PalCentralCoreInstance"] then
+                core = package.loaded["PalCentralCoreInstance"]
+                print("[PalsShop] Found via package.loaded after flag check!")
+                if core and core.data then
+                    return core
+                end
+            end
+        end
+        
+        print("[PalsShop] Waiting for PalCentralCoreInstance... (" .. attempts .. "/" .. max_attempts .. ")")
+        
+        -- Debug: Show what we can see every 5 attempts
+        if attempts % 5 == 0 then
+            print("[PalsShop] Debug - _G.PalCentralCoreInstance =", _G.PalCentralCoreInstance and "FOUND" or "NOT FOUND")
+            print("[PalsShop] Debug - package.loaded['PalCentralCoreInstance'] =", package.loaded["PalCentralCoreInstance"] and "FOUND" or "NOT FOUND")
+            print("[PalsShop] Debug - package.loaded['PalCentralCore'] =", package.loaded["PalCentralCore"] and "FOUND" or "NOT FOUND")
+            print("[PalsShop] Debug - Available global Pal* variables:")
+            for k, v in pairs(_G) do
+                if type(k) == "string" and string.find(k, "Pal") then
+                    print("  - " .. k .. " = " .. type(v))
+                end
+            end
+        end
+        
+        -- Simple delay
+        local start = os.clock()
+        while os.clock() - start < 1 do end
+        
+        attempts = attempts + 1
+    end
+    
+    print("[PalsShop] ERROR: PalCentralCoreInstance not found after " .. max_attempts .. " seconds.")
+    return nil
+end
+
 -- Dependencies
-local core = _G.PalCentralCoreInstance -- Use the global core instance
-local breedingSystem = require("BreedingCore.Scripts.main") -- This one yes, as it is a separate module
+local core = WaitForPalCentralCore()
+if not core then
+    print("[PalsShop] CRITICAL ERROR: Cannot function without PalCentralCore. Mod disabled.")
+    return {}
+end
+
+local breedingSystem = require("breeding") -- Must match filename exactly: breeding.lua
+
+-- Initialize market system
 local PalMarketSystem = {}
 PalMarketSystem.__index = PalMarketSystem
 
 -- ================================================
--- MARKET CONFIGURATIONS
+-- MARKET CONFIGURATION
 -- ================================================
 local MARKET_CONFIG = {
-    MARKET_TAX_RATE = 0.05, -- 5% tax on sales
-    AUCTION_DURATION = 86400, -- 24 hours in seconds
-    MIN_AUCTION_INCREMENT = 100, -- Minimum increment in auctions
+    MARKET_TAX_RATE = 0.05,             -- 5% sales tax
+    AUCTION_DURATION = 86400,           -- 24 hours
+    MIN_AUCTION_INCREMENT = 100,        -- Minimum bid step
     MAX_LISTINGS_PER_PLAYER = 10,
-    DIRECT_SALE_EXPIRY = 604800, -- 7 days for direct sales
-    TRADE_TIMEOUT = 300, -- 5 minutes to accept trades
+    DIRECT_SALE_EXPIRY = 604800,        -- 7 days
+    TRADE_TIMEOUT = 300,                -- 5 minutes
     MINIMUM_SALE_PRICE = 50,
-    AUCTION_START_PERCENTAGE = 0.7, -- 70% of the estimated value
+    AUCTION_START_PERCENTAGE = 0.7,     -- Starts at 70% of value
     FEATURED_LISTINGS_COUNT = 5,
     SEARCH_RESULTS_LIMIT = 50,
-    
-    -- Listing categories
+
+    -- Listing filters
     CATEGORIES = {
-        "all", "perfect", "rare_passives", "high_level", "breeding_ready", 
+        "all", "perfect", "rare_passives", "high_level", "breeding_ready",
         "new_generation", "specific_species", "competitive"
     }
 }
 
 -- ================================================
--- MARKET DATA STRUCTURES
+-- ESTRUTURAS DE DADOS DO MERCADO
 -- ================================================
 local LISTING_STRUCTURE = {
     id = "",
     type = "", -- "direct_sale", "auction", "trade_offer"
     pal_id = "",
     seller_id = "",
-    price = 0, -- For direct sales
-    starting_bid = 0, -- For auctions
+    price = 0, -- Para vendas diretas
+    starting_bid = 0, -- Para leilões
     current_bid = 0,
     current_bidder = "",
-    buyout_price = 0, -- Price for immediate purchase in auctions
+    buyout_price = 0, -- Preço para compra imediata em leilões
     created_at = 0,
     expires_at = 0,
     status = "", -- "active", "sold", "expired", "cancelled"
@@ -51,21 +134,21 @@ local LISTING_STRUCTURE = {
     category = "all",
     featured = false,
     view_count = 0,
-    bid_history = {}, -- Array of bids for auctions
-    trade_offers = {} -- Array of trade offers
+    bid_history = {}, -- Array de bids para leilões
+    trade_offers = {} -- Array de ofertas de troca
 }
 
 local BID_STRUCTURE = {
     bidder_id = "",
     amount = 0,
     timestamp = 0,
-    auto_bid = false -- Auto-bid system
+    auto_bid = false -- Sistema de auto-bid
 }
 
 local TRADE_OFFER_STRUCTURE = {
     id = "",
     offeror_id = "",
-    offered_pals = {}, -- Array of offered Pal IDs
+    offered_pals = {}, -- Array de IDs de Pals oferecidos
     gold_amount = 0,
     message = "",
     created_at = 0,
@@ -74,7 +157,7 @@ local TRADE_OFFER_STRUCTURE = {
 }
 
 -- ================================================
--- MARKET LOG SYSTEM
+-- SISTEMA DE LOG DO MERCADO
 -- ================================================
 function PalMarketSystem:LogMarket(message, level)
     level = level or "INFO"
@@ -84,57 +167,57 @@ function PalMarketSystem:LogMarket(message, level)
 end
 
 -- ================================================
--- LISTING VALIDATION
+-- VALIDAÇÃO DE LISTAGEM
 -- ================================================
 function PalMarketSystem:ValidateListing(pal_id, seller_id, listing_type, data)
     local core = {}
     setmetatable(core, PalCentralCore)
     
-    -- Check if the Pal exists
+    -- Verificar se o Pal existe
     local pal, error_msg = core:GetPal(pal_id, data)
     if not pal then
-        return false, "Pal not found: " .. (error_msg or "unknown error")
+        return false, "Pal não encontrado: " .. (error_msg or "erro desconhecido")
     end
     
-    -- Check ownership
+    -- Verificar propriedade
     if pal.owner_id ~= seller_id then
-        return false, "You are not the owner of this Pal"
+        return false, "Você não é o proprietário deste Pal"
     end
     
-    -- Check if the Pal is available
+    -- Verificar se o Pal está disponível
     if pal.market_status ~= "available" then
-        return false, "Pal is not available for sale (Status: " .. pal.market_status .. ")"
+        return false, "Pal não está disponível para venda (Status: " .. pal.market_status .. ")"
     end
     
-    -- Check player's listing limit
+    -- Verificar limite de listagens do jogador
     local player_listings = self:GetPlayerListings(seller_id, data)
     if #player_listings >= MARKET_CONFIG.MAX_LISTINGS_PER_PLAYER then
-        return false, "Listing limit reached (" .. MARKET_CONFIG.MAX_LISTINGS_PER_PLAYER .. ")"
+        return false, "Limite de listagens atingido (" .. MARKET_CONFIG.MAX_LISTINGS_PER_PLAYER .. ")"
     end
     
-    -- Type-specific validations
+    -- Validações específicas por tipo
     if listing_type == "auction" then
-        -- Auctions require higher value Pals
+        -- Leilões requerem Pals de maior valor
         if pal.breeding_value < 500 then
-            return false, "Pals in auction must have a minimum value of 500"
+            return false, "Pals em leilão devem ter valor mínimo de 500"
         end
     end
     
-    return true, "Listing valid"
+    return true, "Listagem válida"
 end
 
 -- ================================================
--- SUGGESTED PRICE CALCULATION
+-- CÁLCULO DE PREÇO SUGERIDO
 -- ================================================
 function PalMarketSystem:CalculateSuggestedPrice(pal)
     if not pal then return 0 end
     
     local base_price = pal.breeding_value
     
-    -- Bonus for level
-    local level_multiplier = 1 + (pal.level - 1) * 0.05 -- 5% per level above 1
+    -- Bonus por level
+    local level_multiplier = 1 + (pal.level - 1) * 0.05 -- 5% por level acima de 1
     
-    -- Bonus for rare passives
+    -- Bonus por passivas raras
     local passive_bonus = 0
     for _, passive in ipairs(pal.passives) do
         if self:IsPassiveRare(passive) then
@@ -146,20 +229,20 @@ function PalMarketSystem:CalculateSuggestedPrice(pal)
         end
     end
     
-    -- Bonus for perfection
+    -- Bonus por perfeição
     local perfect_multiplier = pal.is_perfect and 2.0 or 1.0
     
-    -- Penalty for high generation
+    -- Penalty por geração alta
     local generation_penalty = math.max(0, (pal.generation - 2) * 0.1)
     
-    -- Final calculation
+    -- Cálculo final
     local final_price = math.floor((base_price + passive_bonus) * level_multiplier * perfect_multiplier * (1 - generation_penalty))
     
     return math.max(MARKET_CONFIG.MINIMUM_SALE_PRICE, final_price)
 end
 
 -- ================================================
--- PASSIVE RARITY VERIFICATION
+-- VERIFICAÇÃO DE RARIDADE DE PASSIVAS
 -- ================================================
 function PalMarketSystem:IsPassiveRare(passive)
     local rare_passives = {"Legend", "Musclehead", "Ferocious", "Burly Body", "Aggressive"}
@@ -186,27 +269,27 @@ function PalMarketSystem:IsPassiveLegendary(passive)
 end
 
 -- ================================================
--- DIRECT SALE CREATION
+-- CRIAÇÃO DE VENDA DIRETA
 -- ================================================
 function PalMarketSystem:CreateDirectSale(pal_id, seller_id, price, description, category, data)
     category = category or "all"
     description = description or ""
     
-    -- Validate listing
+    -- Validar listagem
     local is_valid, validation_error = self:ValidateListing(pal_id, seller_id, "direct_sale", data)
     if not is_valid then
         return nil, validation_error
     end
     
-    -- Validate price
+    -- Validar preço
     if price < MARKET_CONFIG.MINIMUM_SALE_PRICE then
-        return nil, "Minimum price is " .. MARKET_CONFIG.MINIMUM_SALE_PRICE .. " gold"
+        return nil, "Preço mínimo é " .. MARKET_CONFIG.MINIMUM_SALE_PRICE .. " gold"
     end
     
     local core = {}
     setmetatable(core, PalCentralCore)
     
-    -- Create listing
+    -- Criar listagem
     local listing = {}
     for key, value in pairs(LISTING_STRUCTURE) do
         listing[key] = value
@@ -223,35 +306,35 @@ function PalMarketSystem:CreateDirectSale(pal_id, seller_id, price, description,
     listing.description = description
     listing.category = category
     
-    -- Add to database
+    -- Adicionar à base de dados
     if not data.market then
         data.market = {direct_sales = {}, auctions = {}, trade_history = {}}
     end
     
     data.market.direct_sales[listing.id] = listing
     
-    -- Update Pal status
+    -- Atualizar status do Pal
     core:UpdatePal(pal_id, {market_status = "for_sale"}, data)
     
-    self:LogMarket("Direct sale created: " .. listing.id .. " for " .. price .. " gold")
+    self:LogMarket("Venda direta criada: " .. listing.id .. " por " .. price .. " gold")
     return listing, nil
 end
 
 -- ================================================
--- AUCTION CREATION
+-- CRIAÇÃO DE LEILÃO
 -- ================================================
 function PalMarketSystem:CreateAuction(pal_id, seller_id, starting_bid, buyout_price, description, category, data)
     category = category or "all"
     description = description or ""
     buyout_price = buyout_price or 0
     
-    -- Validate listing
+    -- Validar listagem
     local is_valid, validation_error = self:ValidateListing(pal_id, seller_id, "auction", data)
     if not is_valid then
         return nil, validation_error
     end
     
-    -- Calculate suggested starting price if not provided
+    -- Calcular preço inicial sugerido se não fornecido
     if starting_bid <= 0 then
         local core = {}
         setmetatable(core, PalCentralCore)
@@ -260,17 +343,17 @@ function PalMarketSystem:CreateAuction(pal_id, seller_id, starting_bid, buyout_p
     end
     
     if starting_bid < MARKET_CONFIG.MINIMUM_SALE_PRICE then
-        return nil, "Minimum starting bid is " .. MARKET_CONFIG.MINIMUM_SALE_PRICE .. " gold"
+        return nil, "Lance inicial mínimo é " .. MARKET_CONFIG.MINIMUM_SALE_PRICE .. " gold"
     end
     
     if buyout_price > 0 and buyout_price <= starting_bid then
-        return nil, "Buyout price must be higher than the starting bid"
+        return nil, "Preço de compra imediata deve ser maior que o lance inicial"
     end
     
     local core = {}
     setmetatable(core, PalCentralCore)
     
-    -- Create auction
+    -- Criar leilão
     local auction = {}
     for key, value in pairs(LISTING_STRUCTURE) do
         auction[key] = value
@@ -291,53 +374,53 @@ function PalMarketSystem:CreateAuction(pal_id, seller_id, starting_bid, buyout_p
     auction.category = category
     auction.bid_history = {}
     
-    -- Add to database
+    -- Adicionar à base de dados
     if not data.market then
         data.market = {direct_sales = {}, auctions = {}, trade_history = {}}
     end
     
     data.market.auctions[auction.id] = auction
     
-    -- Update Pal status
+    -- Atualizar status do Pal
     core:UpdatePal(pal_id, {market_status = "in_auction"}, data)
     
-    self:LogMarket("Auction created: " .. auction.id .. " with starting bid of " .. starting_bid .. " gold")
+    self:LogMarket("Leilão criado: " .. auction.id .. " com lance inicial de " .. starting_bid .. " gold")
     return auction, nil
 end
 
 -- ================================================
--- BIDDING SYSTEM
+-- SISTEMA DE LANCES
 -- ================================================
 function PalMarketSystem:PlaceBid(auction_id, bidder_id, bid_amount, data)
     if not data.market or not data.market.auctions[auction_id] then
-        return false, "Auction not found"
+        return false, "Leilão não encontrado"
     end
     
     local auction = data.market.auctions[auction_id]
     
-    -- Check if the auction is active
+    -- Verificar se o leilão está ativo
     if auction.status ~= "active" then
-        return false, "Auction is no longer active"
+        return false, "Leilão não está mais ativo"
     end
     
-    -- Check if it has expired
+    -- Verificar se não expirou
     if os.time() > auction.expires_at then
         auction.status = "expired"
-        return false, "Auction expired"
+        return false, "Leilão expirado"
     end
     
-    -- Check if it is not the seller themselves
+    -- Verificar se não é o próprio vendedor
     if bidder_id == auction.seller_id then
-        return false, "Seller cannot bid on their own auction"
+        return false, "Vendedor não pode dar lances em seu próprio leilão"
     end
     
-    -- Check minimum increment
+    -- Verificar incremento mínimo
     local minimum_bid = auction.current_bid + MARKET_CONFIG.MIN_AUCTION_INCREMENT
     if bid_amount < minimum_bid then
-        return false, "Minimum bid is " .. minimum_bid .. " gold"
+        return false, "Lance mínimo é " .. minimum_bid .. " gold"
     end
     
-    -- Register bid
+    -- Registrar lance
     local bid = {
         bidder_id = bidder_id,
         amount = bid_amount,
@@ -349,17 +432,17 @@ function PalMarketSystem:PlaceBid(auction_id, bidder_id, bid_amount, data)
     auction.current_bid = bid_amount
     auction.current_bidder = bidder_id
     
-    -- Check for buyout
+    -- Verificar compra imediata
     if auction.buyout_price > 0 and bid_amount >= auction.buyout_price then
         return self:ExecuteBuyout(auction_id, bidder_id, data)
     end
     
-    self:LogMarket("Bid of " .. bid_amount .. " gold placed on auction " .. auction_id)
-    return true, "Bid registered successfully"
+    self:LogMarket("Lance de " .. bid_amount .. " gold colocado no leilão " .. auction_id)
+    return true, "Lance registrado com sucesso"
 end
 
 -- ================================================
--- BUYOUT
+-- COMPRA IMEDIATA
 -- ================================================
 function PalMarketSystem:ExecuteBuyout(auction_id, buyer_id, data)
     local auction = data.market.auctions[auction_id]
@@ -368,55 +451,55 @@ function PalMarketSystem:ExecuteBuyout(auction_id, buyer_id, data)
 end
 
 -- ================================================
--- DIRECT PURCHASE
+-- COMPRA DIRETA
 -- ================================================
 function PalMarketSystem:PurchaseDirectSale(sale_id, buyer_id, data)
     if not data.market or not data.market.direct_sales[sale_id] then
-        return false, "Sale not found"
+        return false, "Venda não encontrada"
     end
     
     local sale = data.market.direct_sales[sale_id]
     
     if sale.status ~= "active" then
-        return false, "Sale is no longer active"
+        return false, "Venda não está mais ativa"
     end
     
     if os.time() > sale.expires_at then
         sale.status = "expired"
-        return false, "Sale expired"
+        return false, "Venda expirada"
     end
     
     if buyer_id == sale.seller_id then
-        return false, "Cannot buy your own Pal"
+        return false, "Não é possível comprar seu próprio Pal"
     end
     
     return self:CompleteSale(sale.pal_id, sale.seller_id, buyer_id, sale.price, "direct_sale", data)
 end
 
 -- ================================================
--- SALE FINALIZATION
+-- FINALIZAÇÃO DE VENDA
 -- ================================================
 function PalMarketSystem:CompleteSale(pal_id, seller_id, buyer_id, sale_price, sale_type, data)
     local core = {}
     setmetatable(core, PalCentralCore)
     
-    -- Check if the Pal still exists
+    -- Verificar se o Pal ainda existe
     local pal, error_msg = core:GetPal(pal_id, data)
     if not pal then
-        return false, "Pal not found: " .. (error_msg or "unknown error")
+        return false, "Pal não encontrado: " .. (error_msg or "erro desconhecido")
     end
     
-    -- Calculate market tax
+    -- Calcular taxa do mercado
     local market_tax = math.floor(sale_price * MARKET_CONFIG.MARKET_TAX_RATE)
     local seller_receives = sale_price - market_tax
     
-    -- Transfer Pal ownership
+    -- Transferir propriedade do Pal
     core:UpdatePal(pal_id, {
         owner_id = buyer_id,
         market_status = "available"
     }, data)
     
-    -- Record transaction in history
+    -- Registrar transação no histórico
     local transaction = {
         id = core:GenerateUniqueID("TRADE"),
         pal_id = pal_id,
@@ -434,7 +517,7 @@ function PalMarketSystem:CompleteSale(pal_id, seller_id, buyer_id, sale_price, s
     end
     table.insert(data.market.trade_history, transaction)
     
-    -- Remove from active listings
+    -- Remover das listagens ativas
     if sale_type == "direct_sale" then
         for sale_id, sale in pairs(data.market.direct_sales or {}) do
             if sale.pal_id == pal_id then
@@ -451,7 +534,7 @@ function PalMarketSystem:CompleteSale(pal_id, seller_id, buyer_id, sale_price, s
         end
     end
     
-    self:LogMarket("Sale completed: " .. pal.name .. " for " .. sale_price .. " gold (" .. sale_type .. ")")
+    self:LogMarket("Venda completada: " .. pal.name .. " por " .. sale_price .. " gold (" .. sale_type .. ")")
     
     return true, {
         transaction = transaction,
@@ -462,7 +545,7 @@ function PalMarketSystem:CompleteSale(pal_id, seller_id, buyer_id, sale_price, s
 end
 
 -- ================================================
--- MARKET SEARCH
+-- BUSCA NO MERCADO
 -- ================================================
 function PalMarketSystem:SearchMarket(filters, data)
     if not data.market then
@@ -473,7 +556,7 @@ function PalMarketSystem:SearchMarket(filters, data)
     local core = {}
     setmetatable(core, PalCentralCore)
     
-    -- Search in direct sales
+    -- Buscar em vendas diretas
     for _, sale in pairs(data.market.direct_sales or {}) do
         if sale.status == "active" and os.time() <= sale.expires_at then
             local pal = core:GetPal(sale.pal_id, data)
@@ -488,7 +571,7 @@ function PalMarketSystem:SearchMarket(filters, data)
         end
     end
     
-    -- Search in auctions
+    -- Buscar em leilões
     for _, auction in pairs(data.market.auctions or {}) do
         if auction.status == "active" and os.time() <= auction.expires_at then
             local pal = core:GetPal(auction.pal_id, data)
@@ -504,7 +587,7 @@ function PalMarketSystem:SearchMarket(filters, data)
         end
     end
     
-    -- Sort results
+    -- Ordenar resultados
     table.sort(results, function(a, b)
         if filters.sort_by == "price_low" then
             return a.current_price < b.current_price
@@ -514,12 +597,12 @@ function PalMarketSystem:SearchMarket(filters, data)
             return a.pal.level > b.pal.level
         elseif filters.sort_by == "breeding_value" then
             return a.pal.breeding_value > b.pal.breeding_value
-        else -- Default: most recent
+        else -- Default: mais recente
             return a.listing.created_at > b.listing.created_at
         end
     end)
     
-    -- Limit results
+    -- Limitar resultados
     local limited_results = {}
     for i = 1, math.min(#results, MARKET_CONFIG.SEARCH_RESULTS_LIMIT) do
         table.insert(limited_results, results[i])
@@ -529,17 +612,17 @@ function PalMarketSystem:SearchMarket(filters, data)
 end
 
 -- ================================================
--- FILTER VERIFICATION
+-- VERIFICAÇÃO DE FILTROS
 -- ================================================
 function PalMarketSystem:MatchesFilters(pal, listing, filters)
     if not filters then return true end
     
-    -- Filter by species
+    -- Filtro por espécie
     if filters.species and pal.species ~= filters.species then
         return false
     end
     
-    -- Filter by maximum price
+    -- Filtro por preço máximo
     if filters.max_price then
         local price = listing.type == "direct_sale" and listing.price or listing.current_bid
         if price > filters.max_price then
@@ -547,7 +630,7 @@ function PalMarketSystem:MatchesFilters(pal, listing, filters)
         end
     end
     
-    -- Filter by minimum price
+    -- Filtro por preço mínimo
     if filters.min_price then
         local price = listing.type == "direct_sale" and listing.price or listing.current_bid
         if price < filters.min_price then
@@ -555,22 +638,22 @@ function PalMarketSystem:MatchesFilters(pal, listing, filters)
         end
     end
     
-    -- Filter by minimum level
+    -- Filtro por level mínimo
     if filters.min_level and pal.level < filters.min_level then
         return false
     end
     
-    -- Filter by minimum passives
+    -- Filtro por passivas mínimas
     if filters.min_passives and #pal.passives < filters.min_passives then
         return false
     end
     
-    -- Filter by perfect only
+    -- Filtro por perfeitos
     if filters.perfect_only and not pal.is_perfect then
         return false
     end
     
-    -- Filter by category
+    -- Filtro por categoria
     if filters.category and filters.category ~= "all" and listing.category ~= filters.category then
         return false
     end
@@ -579,21 +662,21 @@ function PalMarketSystem:MatchesFilters(pal, listing, filters)
 end
 
 -- ================================================
--- GET PLAYER LISTINGS
+-- OBTER LISTAGENS DO JOGADOR
 -- ================================================
 function PalMarketSystem:GetPlayerListings(player_id, data)
     if not data.market then return {} end
     
     local listings = {}
     
-    -- Direct sales
+    -- Vendas diretas
     for _, sale in pairs(data.market.direct_sales or {}) do
         if sale.seller_id == player_id and sale.status == "active" then
             table.insert(listings, sale)
         end
     end
     
-    -- Auctions
+    -- Leilões
     for _, auction in pairs(data.market.auctions or {}) do
         if auction.seller_id == player_id and auction.status == "active" then
             table.insert(listings, auction)
@@ -604,53 +687,53 @@ function PalMarketSystem:GetPlayerListings(player_id, data)
 end
 
 -- ================================================
--- CANCEL LISTING
+-- CANCELAR LISTAGEM
 -- ================================================
 function PalMarketSystem:CancelListing(listing_id, player_id, data)
     if not data.market then
-        return false, "Market not initialized"
+        return false, "Mercado não inicializado"
     end
     
     local core = {}
     setmetatable(core, PalCentralCore)
     
-    -- Search in direct sales
+    -- Procurar em vendas diretas
     if data.market.direct_sales[listing_id] then
         local sale = data.market.direct_sales[listing_id]
         if sale.seller_id ~= player_id then
-            return false, "You are not the seller of this listing"
+            return false, "Você não é o vendedor desta listagem"
         end
         
         sale.status = "cancelled"
         core:UpdatePal(sale.pal_id, {market_status = "available"}, data)
         
-        self:LogMarket("Direct sale cancelled: " .. listing_id)
-        return true, "Sale cancelled successfully"
+        self:LogMarket("Venda direta cancelada: " .. listing_id)
+        return true, "Venda cancelada com sucesso"
     end
     
-    -- Search in auctions
+    -- Procurar em leilões
     if data.market.auctions[listing_id] then
         local auction = data.market.auctions[listing_id]
         if auction.seller_id ~= player_id then
-            return false, "You are not the seller of this auction"
+            return false, "Você não é o vendedor deste leilão"
         end
         
         if #auction.bid_history > 0 then
-            return false, "Cannot cancel auction with bids"
+            return false, "Não é possível cancelar leilão com lances"
         end
         
         auction.status = "cancelled"
         core:UpdatePal(auction.pal_id, {market_status = "available"}, data)
         
-        self:LogMarket("Auction cancelled: " .. listing_id)
-        return true, "Auction cancelled successfully"
+        self:LogMarket("Leilão cancelado: " .. listing_id)
+        return true, "Leilão cancelado com sucesso"
     end
     
-    return false, "Listing not found"
+    return false, "Listagem não encontrada"
 end
 
 -- ================================================
--- AUTOMATIC CLEANUP OF EXPIRED LISTINGS
+-- LIMPEZA AUTOMÁTICA DE LISTAGENS EXPIRADAS
 -- ================================================
 function PalMarketSystem:CleanupExpiredListings(data)
     if not data.market then return 0 end
@@ -660,7 +743,7 @@ function PalMarketSystem:CleanupExpiredListings(data)
     local core = {}
     setmetatable(core, PalCentralCore)
     
-    -- Clean expired direct sales
+    -- Limpar vendas diretas expiradas
     for _, sale in pairs(data.market.direct_sales or {}) do
         if sale.status == "active" and current_time > sale.expires_at then
             sale.status = "expired"
@@ -669,11 +752,11 @@ function PalMarketSystem:CleanupExpiredListings(data)
         end
     end
     
-    -- Clean expired auctions and finalize with winning bid
+    -- Limpar leilões expirados e finalizar com lance vencedor
     for _, auction in pairs(data.market.auctions or {}) do
         if auction.status == "active" and current_time > auction.expires_at then
             if auction.current_bidder and auction.current_bidder ~= "" then
-                -- Finalize sale with winning bid
+                -- Finalizar venda com lance vencedor
                 self:CompleteSale(auction.pal_id, auction.seller_id, auction.current_bidder, auction.current_bid, "auction", data)
             else
                 auction.status = "expired"
@@ -684,14 +767,14 @@ function PalMarketSystem:CleanupExpiredListings(data)
     end
     
     if cleaned_count > 0 then
-        self:LogMarket("Automatic cleanup: " .. cleaned_count .. " expired listings processed")
+        self:LogMarket("Limpeza automática: " .. cleaned_count .. " listagens expiradas processadas")
     end
     
     return cleaned_count
 end
 
 -- ================================================
--- MARKET STATISTICS
+-- ESTATÍSTICAS DO MERCADO
 -- ================================================
 function PalMarketSystem:GetMarketStatistics(data)
     if not data.market then
@@ -716,7 +799,7 @@ function PalMarketSystem:GetMarketStatistics(data)
         most_popular_species = "N/A"
     }
     
-    -- Count active listings
+    -- Contar listagens ativas
     for _, sale in pairs(data.market.direct_sales or {}) do
         if sale.status == "active" then
             stats.active_direct_sales = stats.active_direct_sales + 1
@@ -731,8 +814,8 @@ function PalMarketSystem:GetMarketStatistics(data)
     
     stats.total_active_listings = stats.active_direct_sales + stats.active_auctions
     
-    -- Analyze sales history
-    local today_start = os.time() - (os.time() % 86400) -- Start of the current day
+    -- Analisar histórico de vendas
+    local today_start = os.time() - (os.time() % 86400) -- Início do dia atual
     local total_sales_value = 0
     
     for _, transaction in ipairs(data.market.trade_history or {}) do
@@ -743,7 +826,7 @@ function PalMarketSystem:GetMarketStatistics(data)
             stats.total_sales_today = stats.total_sales_today + 1
         end
         
-        -- Count species popularity (would need to fetch the Pal)
+        -- Contar popularidade das espécies (seria necessário buscar o Pal)
         -- stats.species_popularity[pal.species] = (stats.species_popularity[pal.species] or 0) + 1
     end
     
@@ -756,6 +839,6 @@ function PalMarketSystem:GetMarketStatistics(data)
 end
 
 -- ================================================
--- EXPORT MODULE
+-- EXPORTAR MÓDULO
 -- ================================================
 return PalMarketSystem

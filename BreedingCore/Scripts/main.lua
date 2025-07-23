@@ -1,5 +1,5 @@
 -- ================================================
--- PALWORLD BREEDING MOD
+-- MOD DE BREEDING - PALWORLD
 -- Version: 1.0.0
 -- Description: Breeding system with guaranteed inheritance
 -- ================================================
@@ -43,7 +43,7 @@ local BREEDING_COMBINATIONS = {
     ["Blazamut-Suzaku"] = {"Blazamut", 15},
     ["Paladius-Necromus"] = {"Shadowbeak", 25},
     
-    -- Default same-species combination
+    -- Default same-species combinations
     default_same_species = {success_rate_modifier = 10}
 }
 
@@ -63,11 +63,23 @@ local PASSIVE_RARITIES = {
 -- ================================================
 function PalBreedingSystem:LogBreeding(message, level)
     level = level or "INFO"
-    -- Directly uses the global PalCentralCore instance, which must be available
-    if _G.PalCentralCoreInstance then
-        _G.PalCentralCoreInstance:Log("[BREEDING] " .. message, level)
+    -- Try multiple methods to find PalCentralCore
+    local core = _G.PalCentralCoreInstance or 
+                package.loaded["PalCentralCoreInstance"] or 
+                package.loaded["PalCentralCore"]
+    
+    -- Try file-based approach if others fail
+    if not core then
+        local success, file_core = pcall(dofile, "palcentral_instance.lua")
+        if success and file_core then
+            core = file_core
+        end
+    end
+    
+    if core and core.Log then
+        core:Log("[BREEDING] " .. message, level)
     else
-        print(string.format("[BREEDING LOG ERROR - PalCentralCore not found] %s", message))
+        print(string.format("[BREEDING LOG] %s", message))
     end
 end
 
@@ -79,7 +91,7 @@ function PalBreedingSystem:ValidateBreedingPair(parent1, parent2, data)
         return false, "One or both parents not found"
     end
     
-    -- Check if parents belong to different owners or same owner allows
+    -- Check if they belong to different owners or same owner allows
     if parent1.owner_id ~= parent2.owner_id then
         return false, "Parents must belong to the same player for direct breeding"
     end
@@ -105,12 +117,12 @@ function PalBreedingSystem:ValidateBreedingPair(parent1, parent2, data)
         return false, parent2.name .. " is still on cooldown for " .. math.ceil(remaining/60) .. " minutes"
     end
     
-    -- Check if not the same Pal
+    -- Check if they are the same Pal
     if parent1.id == parent2.id then
         return false, "A Pal cannot breed with itself"
     end
     
-    -- Check different genders
+    -- Check for different genders
     if parent1.gender == parent2.gender then
         return false, "Parents must have different genders for breeding"
     end
@@ -133,11 +145,11 @@ function PalBreedingSystem:ValidateBreedingPair(parent1, parent2, data)
         return false, parent2.name .. " is not available (status: " .. parent2.market_status .. ")"
     end
     
-    return true, "Valid breeding pair"
+    return true, "Valid pair for breeding"
 end
 
 -- ================================================
--- OFFSPRING SPECIES DETERMINATION
+-- DETERMINATION OF OFFSPRING SPECIES
 -- ================================================
 function PalBreedingSystem:DetermineOffspringSpecies(parent1, parent2)
     -- Ensure alphabetical order for the combination key to avoid duplication (e.g., "A-B" is the same as "B-A")
@@ -218,7 +230,7 @@ function PalBreedingSystem:InheritPassives(parent1, parent2)
 end
 
 -- ================================================
--- SORT PASSIVES BY RARITY
+-- SORTING PASSIVES BY RARITY
 -- ================================================
 function PalBreedingSystem:SortPassivesByRarity(passives)
     local rarity_order = {legendary = 5, epic = 4, rare = 3, uncommon = 2, common = 1}
@@ -265,7 +277,7 @@ function PalBreedingSystem:CalculateSuccessRate(parent1, parent2, facility_type,
     -- Final calculation
     local final_rate = base_rate + facility_bonus + perfect_bonus - generation_penalty + species_bonus
     
-    -- Ensure rate is between 10% and 95%
+    -- Ensure it's between 10% and 95%
     final_rate = math.max(10, math.min(95, final_rate))
     
     return final_rate
@@ -282,7 +294,7 @@ function PalBreedingSystem:CalculateBreedingCost(parent1, parent2, facility_type
     
     -- Cost based on parents' value
     local parents_value = parent1.breeding_value + parent2.breeding_value
-    local value_cost = parents_value * 0.1 -- 10% of total parent value
+    local value_cost = parents_value * 0.1 -- 10% of the total parents' value
     
     -- Cost per generation
     local avg_generation = (parent1.generation + parent2.generation) / 2
@@ -299,8 +311,19 @@ end
 function PalBreedingSystem:PerformBreeding(parent1_id, parent2_id, facility_type, data)
     facility_type = facility_type or "basic"
     
-    -- Directly uses the global PalCentralCore instance
-    local core = _G.PalCentralCoreInstance 
+    -- Try multiple methods to find PalCentralCore
+    local core = _G.PalCentralCoreInstance or 
+                package.loaded["PalCentralCoreInstance"] or 
+                package.loaded["PalCentralCore"]
+    
+    -- Try file-based approach if others fail
+    if not core then
+        local success, file_core = pcall(dofile, "palcentral_instance.lua")
+        if success and file_core then
+            core = file_core
+        end
+    end
+    
     if not core then
         self:LogBreeding("Error: PalCentralCoreInstance not available.", "ERROR")
         return nil, "Central system not initialized"
@@ -317,7 +340,7 @@ function PalBreedingSystem:PerformBreeding(parent1_id, parent2_id, facility_type
         return nil, "Parent 2 not found: " .. (err2 or "unknown error")
     end
     
-    -- Validate pair
+    -- Validate the pair
     local is_valid, validation_error = self:ValidateBreedingPair(parent1, parent2, data)
     if not is_valid then
         return nil, validation_error
@@ -352,7 +375,7 @@ function PalBreedingSystem:PerformBreeding(parent1_id, parent2_id, facility_type
         return nil, "Breeding failed! Success rate was " .. success_rate .. "%"
     end
     
-    -- Create offspring
+    -- Create the offspring
     local offspring_data = {
         species = offspring_species,
         name = "Offspring of " .. parent1.name .. " x " .. parent2.name,
@@ -374,16 +397,16 @@ function PalBreedingSystem:PerformBreeding(parent1_id, parent2_id, facility_type
         return nil, "Error creating offspring: " .. (create_error or "unknown error")
     end
     
-    -- Add to database
+    -- Add to the database
     data.pals[offspring.id] = offspring
     
     -- Consume parents if configured
     if BREEDING_CONFIG.CONSUME_PARENTS then
-        data.pals[parent1_id] = nil -- Remove parent1 from database
-        data.pals[parent2_id] = nil -- Remove parent2 from database
+        data.pals[parent1_id] = nil -- Remove parent1 from the database
+        data.pals[parent2_id] = nil -- Remove parent2 from the database
         self:LogBreeding("Parents consumed in breeding: " .. parent1.name .. " and " .. parent2.name, "INFO")
     else
-        -- Update parents with cooldown and count
+        -- Update parents with cooldown and counter
         local current_time = os.time()
         core:UpdatePal(parent1_id, {
             last_bred = current_time,
@@ -397,7 +420,7 @@ function PalBreedingSystem:PerformBreeding(parent1_id, parent2_id, facility_type
         self:LogBreeding("Parents updated with cooldown: " .. parent1.name .. " and " .. parent2.name, "INFO")
     end
     
-    -- Record in breeding history of PalCentralCore
+    -- Record in the breeding history of PalCentralCore
     if not data.breeding then
         data.breeding = {combinations = {}, success_rates = {}}
     end
@@ -410,10 +433,10 @@ function PalBreedingSystem:PerformBreeding(parent1_id, parent2_id, facility_type
         timestamp = os.time(),
         facility_used = facility_type,
         cost = breeding_cost,
-        offspring_id = offspring.id
+        offspring_id = offspring.id -- Add offspring ID for tracking
     })
     
-    self:LogBreeding("Breeding successful! " .. offspring.name .. " born from " .. parent1.name .. " x " .. parent2.name .. " (ID: " .. offspring.id .. ")", "INFO")
+    self:LogBreeding("Breeding successful! " .. offspring.name .. " was born from " .. parent1.name .. " x " .. parent2.name .. " (ID: " .. offspring.id .. ")", "INFO")
     
     return {
         offspring = offspring,
@@ -448,8 +471,19 @@ end
 function PalBreedingSystem:PreviewBreeding(parent1_id, parent2_id, facility_type, data)
     facility_type = facility_type or "basic"
     
-    -- Directly uses the global PalCentralCore instance
-    local core = _G.PalCentralCoreInstance 
+    -- Try multiple methods to find PalCentralCore
+    local core = _G.PalCentralCoreInstance or 
+                package.loaded["PalCentralCoreInstance"] or 
+                package.loaded["PalCentralCore"]
+    
+    -- Try file-based approach if others fail
+    if not core then
+        local success, file_core = pcall(dofile, "palcentral_instance.lua")
+        if success and file_core then
+            core = file_core
+        end
+    end
+    
     if not core then
         self:LogBreeding("Error: PalCentralCoreInstance not available for preview.", "ERROR")
         return nil, "Central system not initialized for preview"
@@ -484,7 +518,55 @@ function PalBreedingSystem:PreviewBreeding(parent1_id, parent2_id, facility_type
 end
 
 -- ================================================
+-- INITIALIZATION CHECK
+-- ================================================
+-- Debug: Show what globals we can see
+print("[BreedingCore] Checking for PalCentralCore...")
+print("[BreedingCore] _G.PalCentralCoreInstance =", _G.PalCentralCoreInstance and "FOUND" or "NOT FOUND")
+print("[BreedingCore] package.loaded['PalCentralCoreInstance'] =", package.loaded["PalCentralCoreInstance"] and "FOUND" or "NOT FOUND")
+print("[BreedingCore] package.loaded['PalCentralCore'] =", package.loaded["PalCentralCore"] and "FOUND" or "NOT FOUND")
+print("[BreedingCore] Available global Pal* variables:")
+for k, v in pairs(_G) do
+    if type(k) == "string" and string.find(k, "Pal") then
+        print("  - " .. k .. " = " .. type(v))
+    end
+end
+
+-- Try multiple methods to find PalCentralCore (check each explicitly)
+local core = nil
+if _G.PalCentralCoreInstance then
+    core = _G.PalCentralCoreInstance
+    print("[BreedingCore] Found via _G.PalCentralCoreInstance")
+elseif package.loaded["PalCentralCoreInstance"] then
+    core = package.loaded["PalCentralCoreInstance"]
+    print("[BreedingCore] Found via package.loaded['PalCentralCoreInstance']")
+elseif package.loaded["PalCentralCore"] then
+    core = package.loaded["PalCentralCore"]
+    print("[BreedingCore] Found via package.loaded['PalCentralCore']")
+else
+    -- Try file-based approach
+    local success, file_core = pcall(dofile, "palcentral_instance.lua")
+    if success and file_core then
+        core = file_core
+        print("[BreedingCore] Found via file-based communication (palcentral_instance.lua)")
+    else
+        print("[BreedingCore] File-based load failed:", file_core or "unknown error")
+    end
+end
+
+-- Verify that PalCentralCore is available
+if not core then
+    print("[BreedingCore] WARNING: PalCentralCore not found! Some features may not work properly.")
+    print("[BreedingCore] Please ensure PalCentralCore loads before BreedingCore.")
+else
+    print("[BreedingCore] PalCentralCore dependency satisfied. Breeding system ready!")
+    core:Log("[BreedingCore] Breeding system initialized successfully!", "INFO")
+    -- Update the global reference for future use
+    _G.PalCentralCoreInstance = core
+end
+
+-- ================================================
 -- EXPORT MODULE
 -- ================================================
-_G.PalBreedingSystemInstance = PalBreedingSystem
+_G.PalBreedingSystemInstance = PalBreedingSystem -- Expose the module instance globally
 return PalBreedingSystem
