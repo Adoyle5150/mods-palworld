@@ -1,69 +1,77 @@
 # 🏆 PalBattlePass - Seasonal Battle Pass System
 
 **Version:** 1.0.0  
+**Status:** ⚠️ EXPERIMENTAL - Core functionality works, some features may need server-specific adjustments  
 **Compatible:** UE4SS 3.0.0+, Palworld Dedicated Servers  
-**Dependencies:** PalCentralCore (recommended)
+**Dependencies:** PalCentralCore (required for data storage)
 
-A comprehensive **server-side** Battle Pass system for Palworld that rewards players for winning ranked battles with NO UI required! Everything works through intuitive chat commands.
+A **server-side** Battle Pass system for Palworld that tracks player progress and manages rewards through chat commands. 
 
-## 🌟 Key Features
+## ⚠️ Important Notes
 
-### 📈 **Progressive Tier System**
-- **50 tiers** with increasing win requirements  
-- **Epic reward** at 100 wins (exclusive seasonal prize)
-- Smart progression curve that keeps players engaged
+**What Actually Works:**
+- ✅ Chat command system with multiple formats
+- ✅ Tier progression and data tracking
+- ✅ Player statistics and leaderboards  
+- ✅ Reward claiming system (stored in data)
+- ✅ Basic battle validation
 
-### 🎁 **Rich Reward System**
-- **Pal Souls** (Small/Medium/Large) for enhancing Pals
-- **Gold/Currency** for purchasing items
-- **Ancient Civilisation Parts** for crafting
-- **Legendary Pals** with perfect passives
-- **Player Titles** to show off achievements
-- **Seasonal Exclusive Items** that can never be obtained again
-- **Ultimate Rewards** for the most dedicated players
+**Current Limitations:**
+- 🔧 **Battle Detection**: Automatic PvP detection uses experimental UE4SS hooks that may not work on all servers
+- 🔧 **Item Rewards**: Rewards are tracked in data but may not appear in player inventories (server-dependent)
+- 🔧 **Player ID System**: Player identification may be inconsistent across server restarts
+- 🔧 **Manual Setup**: Admins may need to manually register wins during development
 
-### 💬 **Chat-Driven Interface**
-- No custom UI needed - everything works through chat!
-- Intuitive commands: `/bp`, `/battlepass`, `/bp rewards`, etc.
-- Rich, formatted responses with emojis and progress bars
-- Real-time notifications for tier unlocks and achievements
+## 🌟 Core Features
 
-### 🛡️ **Anti-Cheat Integration**
-- Battle duration validation
-- Rate limiting to prevent farming
-- Integration with PalDefender security system
-- Suspicious activity logging and reporting
+### 📈 **Tier System** 
+- **50 progressive tiers** with increasing win requirements (2 → 700 wins)
+- **Epic reward** at 100 wins for ultimate achievement
+- Smart progression curve designed for long-term engagement
 
-### 📊 **Comprehensive Statistics**
-- Win streaks and best streak tracking
+### 🎁 **Reward Types**
+- **Pal Souls** (Small/Medium/Large) for stat enhancement
+- **Gold/Currency** for in-game purchases
+- **Ancient Civilisation Parts** for crafting systems
+- **Legendary Pals** with enhanced stats and passives
+- **Player Titles** for bragging rights
+- **Seasonal Exclusive Items** that expire with the season
+
+### 💬 **Multiple Command Formats**
+Works around server security by supporting:
+- Standard: `/bp`, `/battlepass`
+- Alternative: `!bp`, `.bp` 
+- Plain text: `bp`, `battlepass`
+- Help: `bphelp`
+
+### 📊 **Player Tracking**
+- Win streaks and personal records
 - Season leaderboards with rankings
-- Daily battle activity monitoring
-- Server-wide statistics and analytics
+- Battle history and statistics
+- Progress notifications
 
 ## 🚀 Installation
 
 ### Prerequisites
 1. **Palworld Dedicated Server** with UE4SS 3.0.0+
-2. **PalCentralCore** (recommended for data management)
-3. **PalColiseum** (for automatic ranked battle detection)
+2. **PalCentralCore** (REQUIRED - handles all data storage)
+3. **Server restart** after installation
 
-### Step 1: Extract Files
+### Step 1: File Placement
 ```
-📁 Pal/
-└── 📁 Binaries/Win64/Mods/
-    └── 📁 PalBattlePass/
-        ├── 📄 mod.lua (main entry point)
-        ├── 📄 config.json
-        ├── 📄 README.md
-        └── 📁 Scripts/
-            ├── 📄 main.lua
-            ├── 📄 commands.lua
-            ├── 📄 rewards.lua
-            └── 📄 integration.lua
+📁 Pal/Binaries/Win64/Mods/
+└── 📁 PalBattlePass/
+    ├── 📄 config.json
+    ├── 📄 README.md
+    └── 📁 Scripts/
+        ├── 📄 main.lua (entry point)
+        ├── 📄 commands.lua
+        ├── 📄 rewards.lua
+        └── 📄 integration.lua
 ```
 
-### Step 2: Configure Season
-Edit `config.json` to customize your season:
+### Step 2: Server Configuration
+Edit `config.json` for your season:
 ```json
 {
   "current_season": {
@@ -71,209 +79,194 @@ Edit `config.json` to customize your season:
     "name": "❄️ Winter Conquest", 
     "duration_days": 90,
     "max_tiers": 50,
-    "epic_reward_wins": 100,
-    "description": "Prove your dominance in the frozen battlegrounds!"
+    "epic_reward_wins": 100
   }
 }
 ```
 
-### Step 3: Start Server
-The Battle Pass will automatically load when the server starts. Look for:
+### Step 3: Verification
+After server start, check console for:
 ```
 [PalBattlePass] 🏆 Battle Pass System loaded successfully!
-[PalBattlePass] 💬 Players can use '/bp' or '/battlepass' to get started!
+[PalBattlePass] Global instance created and available!
 ```
+
+**Test Commands:**
+- Console: `TestBattlePass()` - System health check
+- In-game: `bp` or `/bp` - Player status
 
 ## 🎮 Player Commands
 
-### Basic Commands
-| Command | Description |
-|---------|------------|
-| `/bp` or `/battlepass` | Show your Battle Pass status |
-| `/bp status` | Detailed progress information |
-| `/bp rewards` | View available rewards |
-| `/bp claim <tier>` | Claim reward from specific tier |
-| `/bp leaderboard` | Season rankings |
-| `/bp info` | Season information |
-| `/bp help` | Command help |
+| Command | Function | Example |
+|---------|----------|---------|
+| `bp` or `/bp` | Show battle pass status | Main command |
+| `bp claim` | Claim available rewards | Collect tier rewards |
+| `bp rewards` | View upcoming rewards | See next 5 tiers |
+| `bp leaderboard` | Season rankings | Top 10 players |
+| `bphelp` | Command help & formats | Troubleshooting |
 
-### Example Usage
+### Example Output
 ```
-Player: /bp
-🏆 BATTLE PASS STATUS - ❄️ Winter Conquest
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎖️  Current Tier: 15 / 50
-⚔️  Ranked Wins: 79
-📈  Progress to Tier 16: 72%
-🌟  Epic Reward Progress: 79% (79/100 wins)
-🎁  Unclaimed Rewards: 3 tiers
-🔥  Current Win Streak: 5
-📊  Best Win Streak: 12
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Commands: /bp rewards | /bp claim <tier> | /bp help
+🏆 ═══════ BATTLE PASS STATUS ═══════
+🎯 Season: ❄️ Winter Conquest
+⚔️  Ranked Wins: 15 victories
+🏅 Current Tier: 5/50
+🔥 Win Streak: 3 (Best: 8)
+📈 Next tier in 3 wins (18 total needed)
+🎁 UNCLAIMED REWARDS: 2 available!
+💰 Use 'bp claim' to collect them!
 ```
 
-## 🔧 Configuration
+## 🔧 Manual Win Registration
+
+Since automatic battle detection is experimental, admins can manually register wins:
+
+### Console Commands
+```lua
+-- Give a player battle pass wins
+BattlePassCommand("player123", "admin", "give", "5")
+
+-- Check player status  
+BattlePassCommand("player123", "bp")
+
+-- Register single win
+_G.PalBattlePassInstance:RegisterRankedWin("player123", true)
+```
+
+### For Other Mods
+```lua
+-- Integration with custom PvP systems
+if _G.PalBattlePassInstance then
+    _G.PalBattlePassInstance:RegisterRankedWin(winnerPlayerID, true)
+end
+```
+
+## 🛠️ Server Administration
+
+### Data Management
+All data stored in **PalCentralCore**:
+- Player progress: `PalCentralCore.data.players[playerID].battle_pass`
+- Season stats: `PalCentralCore.data.battle_pass.season_stats`
+- Reward history: `PalCentralCore.data.reward_history`
+
+### Troubleshooting
+
+**Battle Pass not responding:**
+```
+1. Check: _G.PalBattlePassInstance exists
+2. Verify: PalCentralCore loaded first
+3. Test: TestBattlePass() in console
+```
+
+**Players can't use commands:**
+```
+1. Try different formats: bp, /bp, !bp, .bp
+2. Check server chat permissions
+3. Use bphelp for format options
+```
+
+**Rewards not working:**
+```
+1. Check: PalCentralCore.data.players[playerID].inventory
+2. Rewards stored in data, may need custom item-giving
+3. Enable debug_mode in config.json for detailed logs
+```
+
+## ⚙️ Configuration Options
 
 ### Season Management
-Easily manage seasons through `config.json`:
-- **Season names** and descriptions
-- **Tier requirements** and progression
-- **Reward templates** for different items
-- **Anti-cheat settings**
-- **Notification preferences**
-
-### Reward Customization
-Create custom rewards using templates:
-```json
-"legendary_shadowbeak": {
-  "type": "legendary_pal",
-  "species": "Shadowbeak",
-  "passives": ["Swift"],
-  "name": "🦅 Legendary Shadowbeak"
-}
-```
-
-### Anti-Cheat Settings
-Configure battle validation:
-```json
-"anti_cheat": {
-  "min_battle_duration": 15,
-  "min_time_between_battles": 30,
-  "max_daily_wins": 50,
-  "enable_validation": true
-}
-```
-
-## 🛠️ Integration
-
-### With PalColiseum
-Automatically detects ranked battle wins and updates progress:
-```lua
--- Automatic integration - no setup required!
--- Players earn progress by winning ranked battles
-```
-
-### With PalCentralCore
-Stores all data in your central database:
-```lua
--- Access player data
-local status = PalBattlePassInstance:GetPlayerStatus("player123")
-```
-
-### Manual Win Registration
-For custom battle systems:
-```lua
--- Register a win manually
-PalBattlePassInstance:RegisterRankedWin("player123", true)
-```
-
-## 📊 Season Management
-
-### Starting New Season
-1. Update `config.json` with new season details
-2. Restart server
-3. Previous season data is preserved for analytics
-
-### Mid-Season Updates
-- Modify reward values without affecting claimed rewards
-- Adjust anti-cheat settings in real-time
-- Add new milestone notifications
-
-## 🎯 Reward Types
-
-| Type | Description | Example |
-|------|-------------|---------|
-| **pal_souls** | Small/Medium/Large Pal Souls | Enhancement materials |
-| **gold** | In-game currency | 5,000 - 25,000 gold |
-| **ancient_parts** | Crafting materials | 2-10 Ancient Parts |
-| **legendary_pal** | Rare Pals with passives | Shadowbeak with Swift |
-| **title** | Player titles | "Battle Veteran" |
-| **seasonal_exclusive** | Limited-time items | Winter Crown |
-| **ultimate_reward** | Unique seasonal Pal | Never obtainable again |
-
-## 🔒 Security Features
-
-### Battle Validation
-- **Duration checks**: Prevents ultra-quick fake battles
-- **Rate limiting**: Stops battle farming
-- **Pattern detection**: Identifies suspicious behavior
-
-### Data Integrity
-- **Atomic operations**: Prevents data corruption
-- **Backup system**: Regular data snapshots
-- **Rollback capability**: Recover from issues
-
-## 🌍 Server Administration
-
-### Monitoring Commands
-```lua
--- Check player progress
-/admin bp player <playerID>
-
--- View season statistics
-/admin bp stats
-
--- Force tier unlock (admin only)
-/admin bp unlock <playerID> <tier>
-```
-
-### Analytics Dashboard
-Access comprehensive statistics:
-- **Daily active users**
-- **Battle completion rates**
-- **Reward claim patterns**
-- **Anti-cheat incident reports**
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**Battle Pass not loading:**
-```
-Solution: Check UE4SS version (3.0.0+ required)
-Verify PalCentralCore is loaded first
-```
-
-**Commands not working:**
-```
-Solution: Ensure chat hook is registered
-Check server logs for hook registration errors
-```
-
-**Rewards not given:**
-```
-Solution: Verify reward system integration
-Check player inventory permissions
-```
-
-### Debug Mode
-Enable detailed logging in `config.json`:
 ```json
 {
+  "current_season": {
+    "id": "unique_season_id",
+    "name": "Season Display Name",
+    "max_tiers": 50,
+    "epic_reward_wins": 100
+  },
+  "anti_cheat": {
+    "min_battle_duration": 30,
+    "min_time_between_battles": 60,
+    "enable_validation": true
+  },
   "debug_mode": true
 }
 ```
 
-## 🚀 Future Features
+## 🔄 Integration Examples
 
-- **Guild Battle Pass**: Shared progression for guilds
-- **Weekly Challenges**: Additional ways to earn progress  
-- **Cosmetic Rewards**: Visual customization items
-- **Cross-Season Rewards**: Special items for veteran players
-- **API Expansion**: More integration options for developers
+### Custom PvP System
+```lua
+-- After a PvP match ends
+local function OnPvPMatchEnd(winnerID, loserID, matchData)
+    if _G.PalBattlePassInstance then
+        -- Register the win
+        local success = _G.PalBattlePassInstance:RegisterRankedWin(winnerID, true)
+        if success then
+            print("Battle Pass win registered for " .. winnerID)
+        end
+    end
+end
+```
 
-## 📞 Support
+### Tournament Integration
+```lua
+-- After tournament victory
+local function OnTournamentWin(playerID, tournamentType)
+    if _G.PalBattlePassInstance then
+        -- Give bonus wins for tournament victory
+        for i = 1, 3 do
+            _G.PalBattlePassInstance:RegisterRankedWin(playerID, true)
+        end
+    end
+end
+```
 
-- **Issues**: Report bugs with detailed server logs
-- **Feature Requests**: Describe desired functionality
-- **Integration Help**: Provide your mod setup details
+## 📋 Development Status
+
+### ✅ Working Features
+- Chat command system with multiple formats
+- Tier progression calculations  
+- Data persistence via PalCentralCore
+- Player statistics and leaderboards
+- Reward tracking and claiming
+- Season management
+
+### 🔧 Experimental Features
+- Automatic battle detection (UE4SS hooks)
+- Direct inventory item giving
+- Real-time chat notifications
+- PalDefender security integration
+
+### 🚧 Future Development
+- **Improved Battle Detection**: More reliable PvP detection methods
+- **Enhanced Rewards**: Better integration with Palworld inventory systems
+- **Guild Integration**: Team-based battle pass progression
+- **Web Dashboard**: External progress tracking and management
+
+## 🐛 Known Issues
+
+1. **Player ID Inconsistency**: Player IDs may change between server restarts
+2. **Item Delivery**: Physical items may not appear in inventory (data tracking works)
+3. **Battle Detection**: Automatic detection depends on fragile UE4SS hooks
+4. **Chat Limitations**: Some servers may block certain command formats
+
+## 📞 Support & Development
+
+**For Server Admins:**
+- Enable `debug_mode: true` for detailed logging
+- Use console commands for testing and manual wins
+- Check PalCentralCore data for player progress
+
+**For Developers:**
+- Use `_G.PalBattlePassInstance` API for integration
+- Battle pass data available in PalCentralCore.data structure
+- Extend reward system through rewards.lua modifications
 
 ## 📝 License
 
-This mod is provided as-is for Palworld dedicated servers. Distribute freely but maintain attribution.
+Provided as-is for Palworld dedicated servers. Distribute freely with attribution.
 
 ---
 
-**Happy Gaming! 🎮**  
-*May your battles be epic and your rewards legendary!* 
+**🎮 Happy Gaming!**  
+*Build your legend, one victory at a time.* 
