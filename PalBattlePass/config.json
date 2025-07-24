@@ -1,0 +1,91 @@
+{
+  "version": "1.0.0",
+  "debug_mode": true,
+  "server_side": true,
+  
+  "current_season": {
+    "id": "Season_Winter_2025",
+    "name": "❄️ Winter Conquest",
+    "duration_days": 90,
+    "max_tiers": 50,
+    "epic_reward_wins": 100,
+    "description": "Prove your dominance in the frozen battlegrounds!"
+  },
+  
+  "next_season": {
+    "id": "Season_Spring_2025",
+    "name": "🌸 Spring Awakening",
+    "max_tiers": 50,
+    "epic_reward_wins": 100,
+    "description": "New beginnings bring new challenges!"
+  },
+  
+  "tier_progression": {
+    "early_tiers": [2, 4, 7, 10, 14, 18, 23, 28, 34, 40],
+    "mid_tiers": [47, 54, 62, 70, 79, 88, 98, 108, 119, 130],
+    "high_tiers": [142, 154, 167, 180, 194, 208, 223, 238, 254, 270],
+    "final_tiers": [287, 304, 322, 340, 359, 378, 398, 418, 439, 460, 482, 504, 527, 550, 574, 598, 623, 648, 674, 700]
+  },
+  
+  "reward_templates": {
+    "small_pal_souls": {
+      "type": "pal_souls",
+      "rarity": "small",
+      "amount": 3,
+      "name": "Pal Soul Cache"
+    },
+    "medium_pal_souls": {
+      "type": "pal_souls",
+      "rarity": "medium", 
+      "amount": 3,
+      "name": "Medium Soul Cache"
+    },
+    "large_pal_souls": {
+      "type": "pal_souls",
+      "rarity": "large",
+      "amount": 2,
+      "name": "Large Soul Cache"
+    },
+    "gold_small": {
+      "type": "gold",
+      "amount": 5000,
+      "name": "Victory Bonus"
+    },
+    "gold_large": {
+      "type": "gold", 
+      "amount": 25000,
+      "name": "Champion's Fortune"
+    },
+    "ancient_parts": {
+      "type": "ancient_parts",
+      "amount": 2,
+      "name": "Ancient Fragments"
+    },
+    "legendary_shadowbeak": {
+      "type": "legendary_pal",
+      "species": "Shadowbeak",
+      "passives": ["Swift"],
+      "name": "🦅 Legendary Shadowbeak"
+    },
+    "legendary_paladius": {
+      "type": "legendary_pal",
+      "species": "Paladius", 
+      "passives": ["Swift", "Ferocious"],
+      "name": "🛡️ Legendary Paladius"
+    }
+  },
+  
+  "anti_cheat": {
+    "min_battle_duration": 15,
+    "min_time_between_battles": 30,
+    "max_daily_wins": 50,
+    "enable_validation": true
+  },
+  
+  "chat_settings": {
+    "enable_notifications": true,
+    "broadcast_epic_unlocks": true,
+    "show_tier_progress": true,
+    "milestone_notifications": [10, 25, 50, 75, 100]
+  }
+} 
